@@ -10,14 +10,51 @@ import {
 
 export default function App() {
   const [activeSection, setActiveSection] = useState('hero');
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const tg = window.Telegram?.WebApp;
+    return Boolean(tg?.isFullscreen || document.fullscreenElement || document.webkitFullscreenElement);
+  });
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const tg = window.Telegram?.WebApp;
+    const isSmallScreen = window.innerWidth <= 768;
+    const isTgMobile = ['android', 'ios'].includes(tg?.platform?.toLowerCase());
+    const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    return Boolean(isSmallScreen || isTgMobile || isMobileUA);
+  });
   const activeSectionRef = useRef('hero');
   const progressBarRef = useRef(null);
 
   // --- 1. Telegram Desktop & Fullscreen Expansion Lifecycle ---
   useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+
+    const updateFullscreenAndInsets = () => {
+      const isTgFull = Boolean(tg?.isFullscreen);
+      const isDocFull = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+      setIsFullscreen(isTgFull || isDocFull);
+
+      // Extract Telegram Bot API 8.0+ content safe areas if available
+      const topInset = tg?.contentSafeAreaInset?.top ?? tg?.safeAreaInset?.top;
+      if (typeof topInset === 'number' && topInset > 0) {
+        document.documentElement.style.setProperty('--tg-dynamic-inset-top', `${topInset + 8}px`);
+      }
+    };
+
+    const handleResize = () => {
+      const isSmallScreen = window.innerWidth <= 768;
+      const isTgMobile = ['android', 'ios'].includes(tg?.platform?.toLowerCase());
+      const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+      setIsMobile(Boolean(isSmallScreen || isTgMobile || isMobileUA));
+      updateFullscreenAndInsets();
+    };
+
+    window.addEventListener('resize', handleResize);
+    document.addEventListener('fullscreenchange', updateFullscreenAndInsets);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenAndInsets);
+
     const initTelegram = () => {
-      const tg = window.Telegram?.WebApp;
       if (!tg) return;
 
       try {
@@ -32,10 +69,12 @@ export default function App() {
         tg.setBackgroundColor?.('#050508');
         tg.enableClosingConfirmation?.();
 
-        // If client supports fullscreen (Bot API 8.0+), expand across entire desktop monitor
+        // If client supports fullscreen (Bot API 8.0+), expand
         if (typeof tg.requestFullscreen === 'function') {
           try {
             tg.requestFullscreen();
+            setTimeout(updateFullscreenAndInsets, 150);
+            setTimeout(updateFullscreenAndInsets, 450);
           } catch (e) {
             console.warn('Telegram requestFullscreen error:', e);
           }
@@ -48,27 +87,28 @@ export default function App() {
           } catch (e) {}
         }
 
-        // Listen for fullscreen state changes
-        if (typeof tg.onEvent === 'function') {
-          tg.onEvent('fullscreenChanged', () => {
-            setIsFullscreen(Boolean(tg.isFullscreen));
-          });
-        }
+        // Listen for fullscreen state changes & safe areas
+        tg.onEvent?.('fullscreenChanged', updateFullscreenAndInsets);
+        tg.onEvent?.('fullscreenFailed', updateFullscreenAndInsets);
+        tg.onEvent?.('safeAreaChanged', updateFullscreenAndInsets);
+        tg.onEvent?.('contentSafeAreaChanged', updateFullscreenAndInsets);
+        tg.onEvent?.('viewportChanged', updateFullscreenAndInsets);
       } catch (err) {
         console.warn('Telegram WebApp init error:', err);
       }
     };
 
     initTelegram();
+    updateFullscreenAndInsets();
 
     // Secondary attempt on user interaction if browser/client deferred fullscreen
     const handleInitialUserGesture = () => {
-      const tg = window.Telegram?.WebApp;
       if (tg) {
         if (!tg.isExpanded) tg.expand?.();
         if (typeof tg.requestFullscreen === 'function' && !tg.isFullscreen) {
           try {
             tg.requestFullscreen();
+            setTimeout(updateFullscreenAndInsets, 150);
           } catch (e) {}
         }
       }
@@ -78,8 +118,18 @@ export default function App() {
     window.addEventListener('keydown', handleInitialUserGesture, { once: true });
 
     return () => {
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('fullscreenchange', updateFullscreenAndInsets);
+      document.removeEventListener('webkitfullscreenchange', updateFullscreenAndInsets);
       window.removeEventListener('click', handleInitialUserGesture);
       window.removeEventListener('keydown', handleInitialUserGesture);
+      if (tg) {
+        tg.offEvent?.('fullscreenChanged', updateFullscreenAndInsets);
+        tg.offEvent?.('fullscreenFailed', updateFullscreenAndInsets);
+        tg.offEvent?.('safeAreaChanged', updateFullscreenAndInsets);
+        tg.offEvent?.('contentSafeAreaChanged', updateFullscreenAndInsets);
+        tg.offEvent?.('viewportChanged', updateFullscreenAndInsets);
+      }
     };
   }, []);
 
@@ -94,15 +144,26 @@ export default function App() {
           tg.requestFullscreen?.();
           setIsFullscreen(true);
         }
+        setTimeout(() => {
+          setIsFullscreen(Boolean(tg.isFullscreen || document.fullscreenElement));
+        }, 150);
         return;
       } catch (e) {}
     }
 
     // Native browser fullscreen fallback
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.().then(() => setIsFullscreen(true)).catch(() => {});
+      document.documentElement.requestFullscreen?.()
+        .then(() => setIsFullscreen(true))
+        .catch(() => {
+          setIsFullscreen(prev => !prev);
+        });
     } else {
-      document.exitFullscreen?.().then(() => setIsFullscreen(false)).catch(() => {});
+      document.exitFullscreen?.()
+        .then(() => setIsFullscreen(false))
+        .catch(() => {
+          setIsFullscreen(false);
+        });
     }
   };
 
@@ -305,7 +366,7 @@ export default function App() {
       </div>
 
       {/* Top Floating Island (Frosted Soft Glass Pill with liar_artist.jpg) */}
-      <header className="header-island">
+      <header className={`header-island ${isMobile && isFullscreen ? 'header-island-mobile-fullscreen' : ''}`}>
         <div 
           onClick={() => scrollTo('hero')} 
           className="header-island-brand"
