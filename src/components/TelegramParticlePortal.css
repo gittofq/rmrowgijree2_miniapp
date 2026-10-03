@@ -1,0 +1,84 @@
+.telegram-portal-section {
+  position: relative;
+  height: 380vh;
+  background: #050508;
+}
+
+.telegram-portal-sticky {
+  position: sticky;
+  top: 0;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 50%, rgba(225, 29, 72, 0.12) 0%, rgba(5, 5, 8, 1) 72%);
+}
+
+.telegram-portal-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.telegram-portal-canvas:active {
+  cursor: grabbing;
+}
+
+.telegram-portal-bottom-hud {
+  position: absolute;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  pointer-events: none;
+}
+
+.telegram-portal-btn {
+  pointer-events: auto;
+  padding: 14px 38px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  border-radius: 9999px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+  color: #ffffff;
+  border: none;
+  font-weight: 700;
+  box-shadow: 0 4px 20px rgba(225, 29, 72, 0.45);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.telegram-portal-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(225, 29, 72, 0.65);
+  background: linear-gradient(135deg, #ff2a5f 0%, #e11d48 100%);
+}
+
+@media (max-width: 640px) {
+  .telegram-portal-bottom-hud {
+    bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+  }
+  .telegram-portal-btn {
+    padding: 12px 26px;
+    font-size: 11px;
+    min-height: 44px;
+  }
+}
